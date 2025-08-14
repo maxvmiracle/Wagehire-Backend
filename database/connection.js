@@ -1,4 +1,4 @@
-const sqlite3 = require('sqlite3').verbose();
+const Database = require('better-sqlite3');
 const path = require('path');
 
 // Use in-memory database for Vercel (serverless environment)
@@ -13,22 +13,21 @@ const getDbPath = () => {
 
 const dbPath = getDbPath();
 
-class Database {
+class DatabaseConnection {
   constructor() {
     this.db = null;
   }
 
   connect() {
     return new Promise((resolve, reject) => {
-      this.db = new sqlite3.Database(dbPath, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
-        if (err) {
-          console.error('Error connecting to database:', err);
-          reject(err);
-        } else {
-          console.log(`Connected to SQLite database: ${dbPath}`);
-          resolve();
-        }
-      });
+      try {
+        this.db = new Database(dbPath);
+        console.log(`Connected to SQLite database: ${dbPath}`);
+        resolve();
+      } catch (err) {
+        console.error('Error connecting to database:', err);
+        reject(err);
+      }
     });
   }
 
@@ -41,18 +40,15 @@ class Database {
 
   close() {
     return new Promise((resolve, reject) => {
-      if (this.db) {
-        this.db.close((err) => {
-          if (err) {
-            console.error('Error closing database:', err);
-            reject(err);
-          } else {
-            console.log('Database connection closed');
-            resolve();
-          }
-        });
-      } else {
+      try {
+        if (this.db) {
+          this.db.close();
+          console.log('Database connection closed');
+        }
         resolve();
+      } catch (err) {
+        console.error('Error closing database:', err);
+        reject(err);
       }
     });
   }
@@ -60,44 +56,44 @@ class Database {
   // Helper method for running queries
   run(sql, params = []) {
     return new Promise((resolve, reject) => {
-      this.db.run(sql, params, function(err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve({ id: this.lastID, changes: this.changes });
-        }
-      });
+      try {
+        const stmt = this.db.prepare(sql);
+        const result = stmt.run(params);
+        resolve({ id: result.lastInsertRowid, changes: result.changes });
+      } catch (err) {
+        reject(err);
+      }
     });
   }
 
   // Helper method for getting single row
   get(sql, params = []) {
     return new Promise((resolve, reject) => {
-      this.db.get(sql, params, (err, row) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(row);
-        }
-      });
+      try {
+        const stmt = this.db.prepare(sql);
+        const row = stmt.get(params);
+        resolve(row);
+      } catch (err) {
+        reject(err);
+      }
     });
   }
 
   // Helper method for getting multiple rows
   all(sql, params = []) {
     return new Promise((resolve, reject) => {
-      this.db.all(sql, params, (err, rows) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(rows);
-        }
-      });
+      try {
+        const stmt = this.db.prepare(sql);
+        const rows = stmt.all(params);
+        resolve(rows);
+      } catch (err) {
+        reject(err);
+      }
     });
   }
 }
 
 // Create singleton instance
-const database = new Database();
+const database = new DatabaseConnection();
 
 module.exports = database; 

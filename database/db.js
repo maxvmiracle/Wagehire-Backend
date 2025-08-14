@@ -1,4 +1,4 @@
-const sqlite3 = require('sqlite3').verbose();
+const Database = require('better-sqlite3');
 const path = require('path');
 
 // Use the same database path logic as connection.js
@@ -14,22 +14,22 @@ const getDbPath = () => {
 const dbPath = getDbPath();
 
 // Create database connection
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('Error opening database:', err);
-  } else {
-    console.log(`Connected to SQLite database: ${dbPath}`);
-  }
-});
+let db;
+try {
+  db = new Database(dbPath);
+  console.log(`Connected to SQLite database: ${dbPath}`);
+} catch (err) {
+  console.error('Error opening database:', err);
+}
 
 // Initialize database tables
 const initializeTables = () => {
   return new Promise((resolve, reject) => {
-    console.log('Initializing database tables...');
-    
-    db.serialize(() => {
+    try {
+      console.log('Initializing database tables...');
+      
       // Create users table
-      db.run(`
+      db.prepare(`
         CREATE TABLE IF NOT EXISTS users (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           email TEXT UNIQUE NOT NULL,
@@ -44,17 +44,11 @@ const initializeTables = () => {
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
-      `, (err) => {
-        if (err) {
-          console.error('Error creating users table:', err);
-          reject(err);
-          return;
-        }
-        console.log('Users table created/verified');
-      });
+      `).run();
+      console.log('Users table created/verified');
 
       // Create interviews table
-      db.run(`
+      db.prepare(`
         CREATE TABLE IF NOT EXISTS interviews (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           candidate_id INTEGER NOT NULL,
@@ -78,17 +72,11 @@ const initializeTables = () => {
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (candidate_id) REFERENCES users (id)
         )
-      `, (err) => {
-        if (err) {
-          console.error('Error creating interviews table:', err);
-          reject(err);
-          return;
-        }
-        console.log('Interviews table created/verified');
-      });
+      `).run();
+      console.log('Interviews table created/verified');
 
       // Create candidates table
-      db.run(`
+      db.prepare(`
         CREATE TABLE IF NOT EXISTS candidates (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           user_id INTEGER NOT NULL,
@@ -102,17 +90,11 @@ const initializeTables = () => {
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (user_id) REFERENCES users (id)
         )
-      `, (err) => {
-        if (err) {
-          console.error('Error creating candidates table:', err);
-          reject(err);
-          return;
-        }
-        console.log('Candidates table created/verified');
-      });
+      `).run();
+      console.log('Candidates table created/verified');
 
       // Create interview_feedback table
-      db.run(`
+      db.prepare(`
         CREATE TABLE IF NOT EXISTS interview_feedback (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           interview_id INTEGER NOT NULL,
@@ -128,17 +110,14 @@ const initializeTables = () => {
           FOREIGN KEY (interview_id) REFERENCES interviews (id),
           FOREIGN KEY (candidate_id) REFERENCES users (id)
         )
-      `, (err) => {
-        if (err) {
-          console.error('Error creating interview_feedback table:', err);
-          reject(err);
-          return;
-        }
-        console.log('Interview feedback table created/verified');
-        console.log('Database initialization completed');
-        resolve();
-      });
-    });
+      `).run();
+      console.log('Interview feedback table created/verified');
+      console.log('Database initialization completed');
+      resolve();
+    } catch (err) {
+      console.error('Failed to initialize database tables:', err);
+      reject(err);
+    }
   });
 };
 
@@ -163,41 +142,33 @@ const ensureTablesInitialized = async () => {
 
 const run = async (sql, params = []) => {
   await ensureTablesInitialized();
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function(err) {
-      if (err) {
-        reject(err);
-      } else {
-        resolve({ id: this.lastID, changes: this.changes });
-      }
-    });
-  });
+  try {
+    const stmt = db.prepare(sql);
+    const result = stmt.run(params);
+    return { id: result.lastInsertRowid, changes: result.changes };
+  } catch (err) {
+    throw err;
+  }
 };
 
 const get = async (sql, params = []) => {
   await ensureTablesInitialized();
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(row);
-      }
-    });
-  });
+  try {
+    const stmt = db.prepare(sql);
+    return stmt.get(params);
+  } catch (err) {
+    throw err;
+  }
 };
 
 const all = async (sql, params = []) => {
   await ensureTablesInitialized();
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(rows);
-      }
-    });
-  });
+  try {
+    const stmt = db.prepare(sql);
+    return stmt.all(params);
+  } catch (err) {
+    throw err;
+  }
 };
 
 module.exports = {

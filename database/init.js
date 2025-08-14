@@ -1,25 +1,25 @@
-const sqlite3 = require('sqlite3').verbose();
+const Database = require('better-sqlite3');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const { db } = require('./db');
 
 async function initDatabase() {
   return new Promise((resolve, reject) => {
-    console.log('Starting database initialization...');
-    
-    db.serialize(() => {
+    try {
+      console.log('Starting database initialization...');
+      
       // Only drop tables if explicitly requested (for development/testing)
       // In production, we want to preserve data
       if (process.env.RESET_DB === 'true') {
         console.log('Resetting database tables...');
-        db.run('DROP TABLE IF EXISTS interview_feedback');
-        db.run('DROP TABLE IF EXISTS interviews');
-        db.run('DROP TABLE IF EXISTS candidates');
-        db.run('DROP TABLE IF EXISTS users');
+        db.prepare('DROP TABLE IF EXISTS interview_feedback').run();
+        db.prepare('DROP TABLE IF EXISTS interviews').run();
+        db.prepare('DROP TABLE IF EXISTS candidates').run();
+        db.prepare('DROP TABLE IF EXISTS users').run();
       }
 
       // Create users table (candidates) with updated role system
-      db.run(`
+      db.prepare(`
         CREATE TABLE IF NOT EXISTS users (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           email TEXT UNIQUE NOT NULL,
@@ -39,10 +39,10 @@ async function initDatabase() {
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
-      `);
+      `).run();
 
       // Create interviews table for candidate's interview schedules
-      db.run(`
+      db.prepare(`
         CREATE TABLE IF NOT EXISTS interviews (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           candidate_id INTEGER NOT NULL,
@@ -68,10 +68,10 @@ async function initDatabase() {
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (candidate_id) REFERENCES users (id)
         )
-      `);
+      `).run();
 
       // Create candidates table
-      db.run(`
+      db.prepare(`
         CREATE TABLE IF NOT EXISTS candidates (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           user_id INTEGER NOT NULL,
@@ -85,10 +85,10 @@ async function initDatabase() {
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (user_id) REFERENCES users (id)
         )
-      `);
+      `).run();
 
       // Create interview_feedback table for candidate's interview feedback
-      db.run(`
+      db.prepare(`
         CREATE TABLE IF NOT EXISTS interview_feedback (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           interview_id INTEGER NOT NULL,
@@ -104,17 +104,15 @@ async function initDatabase() {
           FOREIGN KEY (interview_id) REFERENCES interviews (id),
           FOREIGN KEY (candidate_id) REFERENCES users (id)
         )
-      `);
+      `).run();
 
       console.log('Database tables created successfully');
       console.log('Database is ready for first user registration');
       resolve();
-    });
-
-    db.on('error', (err) => {
+    } catch (err) {
       console.error('Database error:', err);
       reject(err);
-    });
+    }
   });
 }
 
